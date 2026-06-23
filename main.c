@@ -1,5 +1,6 @@
-#include "keyboard_map.h"
+#include "keyboard.h"
 
+/* there are 25 lines each of 80 columns; each element takes 2 bytes */
 #define LINES 25
 #define COLUMNS_IN_LINE 80
 #define BYTES_FOR_EACH_ELEMENT 2
@@ -21,10 +22,10 @@ extern void load_idt(unsigned long *idt_ptr);
 
 /* current cursor location */
 unsigned int current_loc = 0;
+
 /* video memory begins at address 0xb8000 */
 char *vidptr = (char*)0xb8000;
 
-//data
 struct IDT_entry {
 	unsigned short int offset_lowerbits;
 	unsigned short int selector;
@@ -34,29 +35,30 @@ struct IDT_entry {
 };
 
 struct IDT_entry IDT[IDT_SIZE];
-//
 
-//Interrupt Descriptor Table initialize
-void idt_init(void) {
+
+void idt_init(void)
+{
 	unsigned long keyboard_address;
 	unsigned long idt_address;
 	unsigned long idt_ptr[2];
 
-	// populate IDT entry of keyboard's interrupt
-	keyboard_address = (unsigned long)keyboard_handler; 
+	/* populate IDT entry of keyboard's interrupt */
+	keyboard_address = (unsigned long)keyboard_handler;
 	IDT[0x21].offset_lowerbits = keyboard_address & 0xffff;
-	IDT[0x21].selector = 0x08; /* KERNEL_CODE_SEGMENT_OFFSET */
+	IDT[0x21].selector = KERNEL_CODE_SEGMENT_OFFSET;
 	IDT[0x21].zero = 0;
-	IDT[0x21].type_attr = 0x8e; /* INTERRUPT_GATE */
+	IDT[0x21].type_attr = INTERRUPT_GATE;
 	IDT[0x21].offset_higherbits = (keyboard_address & 0xffff0000) >> 16;
 
-	/*     Ports
-	*	 PIC1	PIC2
-	*Command 0x20	0xA0
-	*Data	 0x21	0xA1
+	/*  
+	 * Ports
+	*  PIC1	PIC2
+	* Command 0x20	0xA0
+	* Data	 0x21	0xA1
 	*/
 
-	// ICW1 - begin initialization
+	/* ICW1 - begin initialization */
 	write_port(0x20 , 0x11);
 	write_port(0xA0 , 0x11);
 
@@ -69,15 +71,15 @@ void idt_init(void) {
 	write_port(0xA1 , 0x28);
 
 	/* ICW3 - setup cascading */
-	write_port(0x21 , 0x00);  
-	write_port(0xA1 , 0x00);  
+	write_port(0x21 , 0x00);
+	write_port(0xA1 , 0x00);
 
-	//ICW4 - environment info */
+	/* ICW4 - environment info */
 	write_port(0x21 , 0x01);
 	write_port(0xA1 , 0x01);
-	// Initialization finished
+	/* Initialization finished */
 
-	// mask interrupts
+	/* mask interrupts */
 	write_port(0x21 , 0xff);
 	write_port(0xA1 , 0xff);
 
@@ -89,17 +91,12 @@ void idt_init(void) {
 	load_idt(idt_ptr);
 }
 
-void kb_init(void)
-{
-	/* 0xFD is 11111101 - enables only IRQ1 (keyboard)*/
-	write_port(0x21 , 0xFD);
-}
-
 void kb_init(void) {
 	/* 0xFD is 11111101 - enables only IRQ1 (keyboard)*/
 	write_port(0x21 , 0xFD);
 }
 
+//kernel print funtionality
 void kprint(const char *str) {
 	unsigned int i = 0;
 	while (str[i] != '\0') {
@@ -134,14 +131,19 @@ void keyboard_handler_main(void) {
 		keycode = read_port(KEYBOARD_DATA_PORT);
 		if(keycode < 0)
 			return;
-		vidptr[current_loc++] = keyboard_map[keycode];
-		vidptr[current_loc++] = 0x07;	
+
+		if(keycode == ENTER_KEY_CODE) {
+			kprint_newline();
+			return;
+		}
+
+		vidptr[current_loc++] = keyboard_map[(unsigned char) keycode];
+		vidptr[current_loc++] = 0x07;
 	}
 }
 
-//kernel start point to break your system
 void kmain(void) {
-	const char *str = "Hello world";
+	const char *str = "Custom kernel 0.0.1";
 	clear_screen();
 	kprint(str);
 	kprint_newline();
@@ -150,5 +152,5 @@ void kmain(void) {
 	idt_init();
 	kb_init();
 
-	while(1); //microcontroller style to prevent exit from
+	while(1);
 }

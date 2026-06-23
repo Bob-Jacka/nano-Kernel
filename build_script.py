@@ -9,7 +9,7 @@ ASSEMBLY_COMPILER: Final[str] = 'nasm' # favourite assembly compiler
 C_COMPILER: Final[str] = 'gcc' # favourite c compiler
 LINKER: Final[str] = 'ld' # favourite linker
 
-CURRENT_DIR: Final[str] = Path().absolute() # path to current dir
+CURRENT_DIR: Final[str] = Path().absolute() # path to current dir where script is stored
 
 current_dir_files: list[str] = list(
 		filter(lambda x: not x.startswith('.') or x.endswith('.c') or x.endswith('.asm') or x.endswith('.ld'), 
@@ -19,13 +19,17 @@ current_dir_files: list[str] = list(
 Only visible files in directory
 """
 
-kernel_file_name: Final[str] = 'kernel-100' # kernel name with version
+kernel_file_name: Final[str] = 'kernel' # kernel name with version
 
 def build_asm() -> None:
 	# nasm -f elf32 start_point.asm -o kasm.o
 	print('Compiling assembler code')
 	if current_dir_files.__contains__('start_point.asm'):
-		os.system(f'{ASSEMBLY_COMPILER} -f elf32 start_point.asm -o kasm.o')
+		op_res = os.system(f'{ASSEMBLY_COMPILER} -f elf32 start_point.asm -o kasm.o')
+		if op_res == 0:
+			print('Successful command execution')
+		else:
+			print(f'Not successful command - {op_res} code')
 		return
 	else:
 		print('Current directory not contains asm file')
@@ -34,7 +38,11 @@ def build_c() -> None:
 	# gcc -m32 -c main.c -o kc.o
 	print('Compiling "C" code')
 	if current_dir_files.__contains__('main.c'):
-		os.system(f'{C_COMPILER} -m32 main.c -o kc.o')
+		op_res = os.system(f'{C_COMPILER} -m32 -c main.c -o kc.o')
+		if op_res == 0:
+			print('Successful command execution')
+		else:
+			print(f'Not successful command - {op_res} code')
 		return
 	else:
 		print('Current directory not contains main.c file')
@@ -43,7 +51,20 @@ def use_linker() -> None:
 	# ld -m elf_i386 -T link.ld -o kernel kasm.o kc.o
 	print('Using linking')
 	if current_dir_files.__contains__('main.c') and current_dir_files.__contains__('start_point.asm'):
-		os.system(f'{LINKER} -m elf_i386 -T link.ld -o kernel kasm.o kc.o')
+		op_res = os.system(f'{LINKER} -m elf_i386 -T link.ld -o kernel kasm.o kc.o')
+		if op_res == 0:
+			print('Successful command execution')
+		else:
+			print(f'Not successful command - {op_res} code')
+			print('Try with stack protector')
+			
+			# gcc -fno-stack-protector -m32 -c main.c -o kc.o
+			another_try = os.system(f'{C_COMPILER} -fno-stack-protector -m32 -c main.c -o kc.o')
+			use_linker() # another try of linker usage
+			if another_try == 0:
+				print('Success retry')
+			else:
+				print('Still error')
 		return
 	else:
 		print('Current directory not contains any of compiled files')
@@ -64,11 +85,12 @@ def run_kernel():
 	if current_dir_files.__contains__(kernel_file_name):
 		print('Run kernel on qemu')
 		os.system(f'qemu-system-i386 -kernel {kernel_file_name}')
+		print('Exit from qemu')
 	else:
 		print('No compiled kernel file')
 
 if __name__ == '__main__':
-	if sys.platform == 'linux':
+	if sys.platform == 'linux': # only linux is allowed, who will use windows to install another kernel
 		print('Allowed system')
 		while True:
 			print('Choose option:')
@@ -118,4 +140,4 @@ if __name__ == '__main__':
 					print('Wrong option, try again')
 					continue
 		else:
-			print('System is not allowed')
+			print(f'Your system is not allowed - {sys.platform}')
